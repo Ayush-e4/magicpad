@@ -22,8 +22,8 @@ import kotlinx.coroutines.withContext
 /**
  * Owns discovery and the connection to one Mac; the UI renders [screen]. Main thread only.
  *
- * Auto-connect: each time the app is opened, if the last Mac that reached `ready`
- * shows up in discovery within [AUTO_WAIT_MS], connect to it straight away. It never
+ * Auto-connect ([AutoConnectRule]): from the launcher, only when the last Mac that reached
+ * `ready` is the only Mac around; from the tile/shortcut, straight to that Mac. It never
  * pairs; a Mac that needs pairing sends the user back to the list with a note.
  */
 class Controller(
@@ -45,7 +45,7 @@ class Controller(
     private val discovery =
         Discovery(context) { found ->
             macs = found
-            tryAutoConnect()
+            auto.evaluate()
         }
     private val deviceName =
         Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) ?: Build.MODEL
@@ -56,22 +56,27 @@ class Controller(
     private var job: Job? = null
     private var target: MacService? = null
     private var resumeOnStart = false
-    private var autoId: String? = null
-    private var autoTimeout: Job? = null
+    private val auto = AutoConnector(scope, { macs.mapTo(HashSet()) { it.id } }, ::onAutoDecision)
 
-    fun onStart() {
+    /** [direct]: opened by the tile or shortcut (connect straight to the last Mac). */
+    fun onStart(direct: Boolean) {
         discovery.start()
         val mac = target
         if (resumeOnStart && mac != null) {
             resumeOnStart = false
             connect(mac, allowPairing = false, auto = false)
         } else {
-            armAutoConnect()
+            armAutoConnect(direct)
         }
     }
 
     /** The app was opened again (launcher, tile or shortcut) while it was already running. */
-    fun onOpened() = armAutoConnect()
+    fun onOpened(direct: Boolean) = armAutoConnect(direct)
+
+    /** Whether this phone has a pairing key for [mac] (looked up by its discovery id). */
+    fun isPaired(mac: MacService): Boolean = store.pairingKey(mac.id) != null
+
+    val lastMacId: String? get() = store.lastMacId
 
     fun onStop() {
         discovery.stop()
@@ -81,7 +86,7 @@ class Controller(
             resumeOnStart = true
             dropConnection()
             show(current.copy(live = false))
-        } else if (job != null || autoId != null) {
+        } else if (job != null || auto.mode != null) {
             leave()
         }
     }
@@ -132,7 +137,7 @@ class Controller(
                     connect(mac, allowPairing = false, auto = true)
                 } else {
                     show(Screen.Home)
-                    armAutoConnect()
+                    armAutoConnect(direct = true) // It was waiting for the last Mac.
                 }
             }
         }
@@ -147,35 +152,43 @@ class Controller(
         sender?.update(touches, widthMm, heightMm, timeMs)
     }
 
-    private fun armAutoConnect() {
+    /** SMART (launcher) or DIRECT (tile/shortcut); a DIRECT request overrides a pending SMART one. */
+    private fun armAutoConnect(direct: Boolean) {
         // Only from Home/Error: never while Settings is open (e.g. back from the photo picker).
         if (job != null || (screen != Screen.Home && screen !is Screen.Error)) return
-        val id = store.lastMacId ?: return
-        autoId = id
-        show(Screen.Connecting(store.lastMacName ?: "your Mac"))
-        autoTimeout?.cancel()
-        autoTimeout =
-            scope.launch {
-                delay(AUTO_WAIT_MS)
-                if (autoId != null) {
-                    disarmAutoConnect()
+        val pending = auto.mode
+        if (pending == AutoMode.DIRECT || (pending == AutoMode.SMART && !direct)) return
+        if (direct) {
+            show(Screen.Connecting(store.lastMacName ?: "your Mac"))
+        } else if (screen is Screen.Error) {
+            show(Screen.Home)
+        }
+        auto.arm(if (direct) AutoMode.DIRECT else AutoMode.SMART, store.lastMacId, store.loadPadSettings().autoConnect)
+    }
+
+    private fun onAutoDecision(
+        decision: AutoDecision,
+        mode: AutoMode,
+    ) {
+        when (decision) {
+            is AutoDecision.Connect -> {
+                val mac = discovery.find(decision.id)
+                if (mac != null) {
+                    connect(mac, allowPairing = false, auto = true)
+                } else if (mode == AutoMode.DIRECT) {
                     show(Screen.Home)
                 }
             }
-        tryAutoConnect()
+            AutoDecision.ShowList ->
+                if (mode == AutoMode.DIRECT) {
+                    store.lastMacName?.let { homeNote = "Couldn't find $it on this Wi-Fi." }
+                    show(Screen.Home)
+                }
+            AutoDecision.KeepWaiting -> Unit
+        }
     }
 
-    private fun tryAutoConnect() {
-        val mac = autoId?.let(discovery::find) ?: return
-        disarmAutoConnect()
-        connect(mac, allowPairing = false, auto = true)
-    }
-
-    private fun disarmAutoConnect() {
-        autoId = null
-        autoTimeout?.cancel()
-        autoTimeout = null
-    }
+    private fun disarmAutoConnect() = auto.disarm()
 
     private fun connect(
         mac: MacService,
@@ -268,6 +281,5 @@ class Controller(
 
     private companion object {
         const val RETRY_DELAY_MS = 1000L
-        const val AUTO_WAIT_MS = 4000L
     }
 }

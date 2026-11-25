@@ -50,7 +50,15 @@ class MainActivity : ComponentActivity() {
                     BackHandler(enabled = screen != Screen.Home && !inSettings) { controller.leave() }
                     when (screen) {
                         is Screen.Settings -> SettingsScreen(settings, glSupported, controller::closeSettings)
-                        Screen.Home -> HomeScreen(controller.macs, controller.homeNote, controller::pick, controller::openSettings)
+                        Screen.Home ->
+                            HomeScreen(
+                                controller.macs,
+                                controller.lastMacId,
+                                controller::isPaired,
+                                controller.homeNote,
+                                controller::pick,
+                                controller::openSettings,
+                            )
                         is Screen.Connecting -> ConnectingScreen(screen.macName, controller::leave, controller::openSettings)
                         is Screen.Pairing -> PairingScreen(screen.macName, screen.code, controller::leave)
                         is Screen.Pad ->
@@ -82,12 +90,19 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        controller.onOpened()
+        controller.onOpened(direct = consumeTrackpadIntent())
     }
 
     override fun onStart() {
         super.onStart()
-        controller.onStart()
+        controller.onStart(direct = consumeTrackpadIntent())
+    }
+
+    /** True once for an open by the tile or shortcut; later starts count as normal opens. */
+    private fun consumeTrackpadIntent(): Boolean {
+        val direct = intent?.action == ACTION_TRACKPAD
+        if (direct) intent.action = null
+        return direct
     }
 
     override fun onStop() {

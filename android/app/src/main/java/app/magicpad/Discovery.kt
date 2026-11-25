@@ -32,6 +32,11 @@ class Discovery(
 
     fun start() {
         if (listener != null) return
+        // Forget Macs from before a stop: only what answers now counts for auto-connect.
+        if (found.isNotEmpty()) {
+            found.clear()
+            onChange(emptyList())
+        }
         val l =
             object : NsdManager.DiscoveryListener {
                 override fun onDiscoveryStarted(serviceType: String) = Unit

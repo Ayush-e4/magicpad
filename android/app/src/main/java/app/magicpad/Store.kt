@@ -45,6 +45,7 @@ class Store(
             background = PadBackground.fromKey(prefs.getString(KEY_BACKGROUND, null)),
             photoDim = prefs.getFloat(KEY_PHOTO_DIM, PadSettings.DEFAULT_PHOTO_DIM),
             brightness = if (prefs.contains(KEY_BRIGHTNESS)) prefs.getFloat(KEY_BRIGHTNESS, 0f) else null,
+            autoConnect = prefs.getBoolean(KEY_AUTO_CONNECT, false),
         )
 
     fun savePadSettings(settings: PadSettings) =
@@ -53,6 +54,7 @@ class Store(
             putFloat(KEY_PHOTO_DIM, settings.photoDim)
             val b = settings.brightness
             if (b == null) remove(KEY_BRIGHTNESS) else putFloat(KEY_BRIGHTNESS, b)
+            putBoolean(KEY_AUTO_CONNECT, settings.autoConnect)
         }
 
     /** Changes whenever a new pad photo is saved; 0 = none yet. */
@@ -69,5 +71,6 @@ class Store(
         const val KEY_PHOTO_DIM = "pad_photo_dim"
         const val KEY_BRIGHTNESS = "pad_brightness"
         const val KEY_PHOTO_VERSION = "pad_photo_version"
+        const val KEY_AUTO_CONNECT = "auto_connect_on_open" // renamed so the old default (on) is dropped
     }
 }

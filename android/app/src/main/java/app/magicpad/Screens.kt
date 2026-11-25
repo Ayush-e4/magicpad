@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     macs: List<MacService>,
+    lastId: String?,
+    isPaired: (MacService) -> Boolean,
     note: String?,
     onPick: (MacService) -> Unit,
     onSettings: () -> Unit,
@@ -64,16 +66,40 @@ fun HomeScreen(
             }
         } else {
             LazyColumn {
-                items(macs, key = { it.serviceName }) { mac ->
-                    Text(
-                        mac.serviceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.fillMaxWidth().clickable { onPick(mac) }.padding(vertical = 16.dp),
-                    )
+                items(AutoConnectRule.lastUsedFirst(macs, lastId), key = { it.serviceName }) { mac ->
+                    MacRow(mac, isLast = mac.id == lastId, paired = isPaired(mac)) { onPick(mac) }
                     HorizontalDivider()
                 }
             }
         }
+    }
+}
+
+/** One Mac in the list: name, "Last used" tag, and whether tapping it will ask for a code. */
+@Composable
+private fun MacRow(
+    mac: MacService,
+    isLast: Boolean,
+    paired: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(mac.serviceName, style = MaterialTheme.typography.titleMedium)
+            if (isLast) {
+                Text(
+                    "Last used",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+        Text(
+            if (paired) "Paired" else "Not paired — you'll confirm a code",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

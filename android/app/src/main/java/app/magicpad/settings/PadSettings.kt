@@ -21,13 +21,15 @@ enum class PadBackground(
 }
 
 /**
- * Pad look settings. [brightness] is null until the user moves the slider; until then the
+ * App settings (mostly the pad's look). [brightness] is null until the user moves the slider; until then the
  * pad uses [defaultBrightness] for the chosen background (dim for Black, brighter otherwise).
  */
 data class PadSettings(
     val background: PadBackground = PadBackground.BLACK,
     val photoDim: Float = DEFAULT_PHOTO_DIM,
     val brightness: Float? = null,
+    /** Skip the list on open when only the last-used Mac is around. */
+    val autoConnect: Boolean = false, // off: opening the app waits for the user to pick a Mac
 ) {
     /** Window screenBrightness to use on the pad, 0.01–1. */
     val effectiveBrightness: Float get() = brightness ?: defaultBrightness(background)
@@ -38,6 +40,8 @@ data class PadSettings(
     fun withBrightness(value: Float) = copy(brightness = value.coerceIn(MIN_BRIGHTNESS, MAX_BRIGHTNESS))
 
     fun withPhotoDim(value: Float) = copy(photoDim = value.coerceIn(0f, MAX_PHOTO_DIM))
+
+    fun withAutoConnect(on: Boolean) = copy(autoConnect = on)
 
     companion object {
         const val MIN_BRIGHTNESS = 0.01f
