@@ -39,6 +39,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.magicpad.Controller
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import app.magicpad.Problem
 import app.magicpad.R
 import app.magicpad.settings.PadBackground
 import app.magicpad.settings.PadSettings
@@ -54,6 +63,7 @@ import java.io.File
 fun PadScreen(
     macName: String,
     live: Boolean,
+    trouble: Problem?,
     controller: Controller,
     settings: PadSettings,
     photo: File,
@@ -95,10 +105,57 @@ fun PadScreen(
                 settings.stripPlace,
                 controller::runShortcut,
                 Modifier.align(stripAlignment(settings.stripSide, settings.stripPlace)),
+                enabled = live,
+            )
+        }
+        if (live && !controller.macAccess) {
+            Notice(
+                "Your Mac hasn't allowed MagicPad to move the pointer",
+                "On the Mac, click MagicPad's icon in the menu bar, then Allow Accessibility access.",
+                Modifier.align(Alignment.TopCenter).padding(top = 32.dp),
+            )
+        }
+        if (trouble != null) {
+            Notice(
+                trouble.title,
+                trouble.help + " Still trying to reconnect…",
+                Modifier.align(Alignment.Center),
+                action = "Back to Macs" to controller::leave,
             )
         }
         // Above PadView: Compose hit-tests it first, so touches that start here never reach the Mac.
         SettingsGear(controller::openSettings, Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp))
+    }
+}
+
+/** A card over the pad that explains what's wrong, with an optional button. */
+@Composable
+private fun Notice(
+    title: String,
+    help: String,
+    modifier: Modifier,
+    action: Pair<String, () -> Unit>? = null,
+) {
+    Column(
+        modifier
+            .widthIn(max = 460.dp)
+            .padding(horizontal = 24.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        Text(
+            help,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (action != null) {
+            TextButton(onClick = action.second, modifier = Modifier.padding(top = 4.dp)) { Text(action.first) }
+        }
     }
 }
 

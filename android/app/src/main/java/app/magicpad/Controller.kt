@@ -48,6 +48,15 @@ class Controller(
             macs = found
             auto.evaluate()
         }
+    private val wifi = WifiWatcher(context) { discovery.restart() }
+
+    /** False on Home while the phone isn't on any Wi-Fi network. */
+    val onWifi: Boolean get() = wifi.connected
+
+    /** False when the Mac says it isn't allowed to move the pointer (Accessibility is off there). */
+    var macAccess: Boolean by mutableStateOf(true)
+        private set
+
     private val deviceName =
         Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME) ?: Build.MODEL
 
@@ -61,6 +70,7 @@ class Controller(
 
     /** [direct]: opened by the tile or shortcut (connect straight to the last Mac). */
     fun onStart(direct: Boolean) {
+        wifi.start()
         discovery.start()
         val mac = target
         if (resumeOnStart && mac != null) {
@@ -80,6 +90,7 @@ class Controller(
     val lastMacId: String? get() = store.lastMacId
 
     fun onStop() {
+        wifi.stop()
         discovery.stop()
         val current = screen
         if (current is Screen.Pad) {
@@ -96,6 +107,12 @@ class Controller(
     fun pick(mac: MacService) {
         homeNote = null
         disarmAutoConnect()
+        connect(mac, allowPairing = true, auto = false)
+    }
+
+    /** "Try again" on an error: reconnect to the same Mac, pairing if it asks. */
+    fun retry() {
+        val mac = (screen as? Screen.Error)?.mac ?: return leave()
         connect(mac, allowPairing = true, auto = false)
     }
 
@@ -204,11 +221,13 @@ class Controller(
     ) {
         dropConnection()
         target = mac
+        macAccess = true
         val onPad = screen is Screen.Pad
         show(if (onPad) Screen.Pad(mac.serviceName, live = false) else Screen.Connecting(mac.serviceName))
         job =
             scope.launch {
                 var first = true
+                var failingSince = 0L // when reconnecting on the pad started failing
                 while (isActive) {
                     val m = discovery.find(mac.id) ?: mac
                     val s = Session(m.host, m.port, store, deviceName, allowPairing && first, listener)
@@ -218,21 +237,28 @@ class Controller(
                     session = null
                     sender = null
                     if (!isActive) break
+                    if (s.reachedReady) failingSince = 0L
                     val padName = (screen as? Screen.Pad)?.macName
                     when (end) {
                         SessionEnd.Closed -> show(Screen.Home)
-                        SessionEnd.Denied -> show(Screen.Error("Your Mac didn't allow this phone."))
                         SessionEnd.NeedsPairing -> backToList("${mac.serviceName} needs to pair again. Tap it to pair.")
-                        is SessionEnd.Failed ->
+                        SessionEnd.Denied -> show(Screen.Error(Problem.denied(mac.serviceName), mac))
+                        is SessionEnd.Failed -> {
+                            val problem = Problem.of(end.kind, mac.serviceName)
                             when {
                                 padName != null -> {
-                                    show(Screen.Pad(padName, live = false))
+                                    // Keep retrying on the pad; after a while, say why and what to check.
+                                    val now = System.currentTimeMillis()
+                                    if (failingSince == 0L) failingSince = now
+                                    val trouble = problem.takeIf { now - failingSince >= TROUBLE_AFTER_MS }
+                                    show(Screen.Pad(padName, live = false, trouble = trouble))
                                     delay(RETRY_DELAY_MS)
                                     continue
                                 }
-                                auto -> backToList("Couldn't reach ${mac.serviceName}.")
-                                else -> show(Screen.Error(end.reason))
+                                auto -> backToList("${problem.title}. ${problem.help}")
+                                else -> show(Screen.Error(problem, mac))
                             }
+                        }
                     }
                     break
                 }
@@ -284,9 +310,14 @@ class Controller(
                 kind: HapticKind,
                 strength: Double?,
             ) = haptics.play(kind, strength)
+
+            override fun onMacAccess(allowed: Boolean) {
+                scope.launch { macAccess = allowed }
+            }
         }
 
     private companion object {
         const val RETRY_DELAY_MS = 1000L
+        const val TROUBLE_AFTER_MS = 8000L
     }
 }

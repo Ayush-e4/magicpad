@@ -75,6 +75,9 @@ Session key: `S = HKDF(shared ‖ K, "magicpad v1 session", 32)`.
   | `tick` | every few lines of scrolling (if enabled on the Mac) | very light tick |
 
   The Mac sends nothing when haptics are off.
+- Mac → phone `{"t":"status","access":<bool>}`: right after `ready`, and whenever it
+  changes. `access` is false while the Mac's Accessibility switch for MagicPad is off,
+  so the pointer can't move; the phone tells the user how to turn it on.
 - phone → Mac `{"t":"action","a":"<action>"}`: a shortcut button was tapped.
   The Mac runs it as if pressed on its own keyboard, and ignores unknown actions:
 

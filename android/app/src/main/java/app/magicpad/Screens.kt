@@ -1,107 +1,37 @@
 package app.magicpad
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-@Composable
-fun HomeScreen(
-    macs: List<MacService>,
-    lastId: String?,
-    isPaired: (MacService) -> Boolean,
-    note: String?,
-    onPick: (MacService) -> Unit,
-    onSettings: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("MagicPad", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = onSettings) { Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings") }
-        }
-        Text(
-            "Open MagicPad on your Mac. Both devices need to be on the same Wi-Fi.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (note != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-        }
-        Spacer(Modifier.height(16.dp))
-        if (macs.isEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                CircularProgressIndicator(Modifier.size(28.dp))
-                Spacer(Modifier.height(12.dp))
-                Text("Searching for your Mac on this Wi-Fi…")
-            }
-        } else {
-            LazyColumn {
-                items(AutoConnectRule.lastUsedFirst(macs, lastId), key = { it.serviceName }) { mac ->
-                    MacRow(mac, isLast = mac.id == lastId, paired = isPaired(mac)) { onPick(mac) }
-                    HorizontalDivider()
-                }
-            }
-        }
-    }
-}
-
-/** One Mac in the list: name, "Last used" tag, and whether tapping it will ask for a code. */
-@Composable
-private fun MacRow(
-    mac: MacService,
-    isLast: Boolean,
-    paired: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(mac.serviceName, style = MaterialTheme.typography.titleMedium)
-            if (isLast) {
-                Text(
-                    "Last used",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-        }
-        Text(
-            if (paired) "Paired" else "Not paired — you'll confirm a code",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
+import app.magicpad.ui.Brand
+import app.magicpad.ui.GradientButton
+import app.magicpad.ui.SearchPulse
 
 @Composable
 fun ConnectingScreen(
@@ -109,9 +39,9 @@ fun ConnectingScreen(
     onCancel: () -> Unit,
     onSettings: () -> Unit,
 ) = Centered {
-    CircularProgressIndicator()
+    SearchPulse(Modifier.size(180.dp)) { MacBadge() }
+    Text("Connecting to $macName…", style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(16.dp))
-    Text("Connecting to $macName…")
     Row {
         TextButton(onClick = onCancel) { Text("Cancel") }
         TextButton(onClick = onSettings) { Text("Settings") }
@@ -124,27 +54,75 @@ fun PairingScreen(
     code: String,
     onCancel: () -> Unit,
 ) = Centered {
-    Text("Pair with $macName", style = MaterialTheme.typography.titleMedium)
-    Spacer(Modifier.height(12.dp))
+    MacBadge()
+    Spacer(Modifier.height(16.dp))
+    Text("Pair with $macName", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
     Text(
-        code.chunked(3).joinToString(" "),
-        fontSize = 56.sp,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold,
+        "Check that your Mac shows the same code, then click Allow there.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
     )
-    Spacer(Modifier.height(12.dp))
-    Text("Confirm this code on your Mac", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    CodeDigits(code)
+    Spacer(Modifier.height(24.dp))
     TextButton(onClick = onCancel) { Text("Cancel") }
 }
 
+/** One box per digit, in groups of three. */
+@Composable
+private fun CodeDigits(code: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        code.forEachIndexed { i, digit ->
+            if (i > 0 && i % 3 == 0) Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier
+                    .size(width = 40.dp, height = 56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(1.5.dp, Brand.gradient, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("$digit", fontSize = 30.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** What went wrong, what to check, and the way forward. */
 @Composable
 fun ErrorScreen(
-    message: String,
-    onOk: () -> Unit,
+    problem: Problem,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
 ) = Centered {
-    Text(message, textAlign = TextAlign.Center)
-    Spacer(Modifier.height(12.dp))
-    TextButton(onClick = onOk) { Text("OK") }
+    Box(
+        Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.errorContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("!", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+    }
+    Spacer(Modifier.height(16.dp))
+    Text(problem.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+    Text(
+        problem.help,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
+    )
+    if (problem.canRetry) GradientButton("Try again", onRetry)
+    TextButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) { Text("Back to Macs") }
+}
+
+@Composable
+private fun MacBadge() {
+    Box(
+        Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(R.drawable.ic_mac), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+    }
 }
 
 @Composable

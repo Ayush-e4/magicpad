@@ -12,11 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.snapshotFlow
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -28,6 +24,7 @@ import app.magicpad.pad.PadGl
 import app.magicpad.pad.PadScreen
 import app.magicpad.settings.SettingsModel
 import app.magicpad.settings.SettingsScreen
+import app.magicpad.ui.MagicPadTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -42,7 +39,7 @@ class MainActivity : ComponentActivity() {
         settings = SettingsModel(this)
         val glSupported = PadGl.supported(this)
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            MagicPadTheme {
                 Surface {
                     val screen = controller.screen
                     val inSettings = screen is Screen.Settings
@@ -56,6 +53,7 @@ class MainActivity : ComponentActivity() {
                                 controller.lastMacId,
                                 controller::isPaired,
                                 controller.homeNote,
+                                controller.onWifi,
                                 controller::pick,
                                 controller::openSettings,
                             )
@@ -65,12 +63,13 @@ class MainActivity : ComponentActivity() {
                             PadScreen(
                                 screen.macName,
                                 screen.live,
+                                screen.trouble,
                                 controller,
                                 settings.value,
                                 settings.photoFile,
                                 settings.photoVersion,
                             )
-                        is Screen.Error -> ErrorScreen(screen.message, controller::leave)
+                        is Screen.Error -> ErrorScreen(screen.problem, controller::retry, controller::leave)
                     }
                 }
             }
