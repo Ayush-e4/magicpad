@@ -102,6 +102,42 @@ class Controller(
         show(Screen.Home)
     }
 
+    /** Opens Settings, dropping any pad session or connect attempt until Settings is closed. */
+    fun openSettings() {
+        val mac = target
+        val back =
+            when (screen) {
+                is Screen.Pad -> mac?.let { SettingsReturn.Pad(it) } ?: SettingsReturn.Home
+                is Screen.Connecting -> SettingsReturn.Connect(mac)
+                else -> SettingsReturn.Home
+            }
+        disarmAutoConnect()
+        dropConnection()
+        resumeOnStart = false
+        show(Screen.Settings(back))
+    }
+
+    /** Back from Settings to wherever it was opened from. */
+    fun closeSettings() {
+        val back = (screen as? Screen.Settings)?.back ?: return
+        when (back) {
+            SettingsReturn.Home -> show(Screen.Home)
+            is SettingsReturn.Pad -> {
+                show(Screen.Pad(back.mac.serviceName, live = false))
+                connect(back.mac, allowPairing = false, auto = false) // The pad's reconnect path.
+            }
+            is SettingsReturn.Connect -> {
+                val mac = back.mac
+                if (mac != null) {
+                    connect(mac, allowPairing = false, auto = true)
+                } else {
+                    show(Screen.Home)
+                    armAutoConnect()
+                }
+            }
+        }
+    }
+
     fun onTouches(
         touches: List<TouchPoint>,
         widthMm: Double,
@@ -112,6 +148,7 @@ class Controller(
     }
 
     private fun armAutoConnect() {
+        // Only from Home/Error: never while Settings is open (e.g. back from the photo picker).
         if (job != null || (screen != Screen.Home && screen !is Screen.Error)) return
         val id = store.lastMacId ?: return
         autoId = id

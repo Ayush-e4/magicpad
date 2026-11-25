@@ -24,26 +24,44 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import app.magicpad.pad.PadGl
+import app.magicpad.pad.PadScreen
+import app.magicpad.settings.SettingsModel
+import app.magicpad.settings.SettingsScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: Controller
+    private lateinit var settings: SettingsModel
     private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         controller = Controller(this, lifecycleScope)
+        settings = SettingsModel(this)
+        val glSupported = PadGl.supported(this)
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface {
                     val screen = controller.screen
-                    BackHandler(enabled = screen != Screen.Home) { controller.leave() }
+                    val inSettings = screen is Screen.Settings
+                    BackHandler(enabled = inSettings) { controller.closeSettings() }
+                    BackHandler(enabled = screen != Screen.Home && !inSettings) { controller.leave() }
                     when (screen) {
-                        Screen.Home -> HomeScreen(controller.macs, controller.homeNote, controller::pick)
-                        is Screen.Connecting -> ConnectingScreen(screen.macName, controller::leave)
+                        is Screen.Settings -> SettingsScreen(settings, glSupported, controller::closeSettings)
+                        Screen.Home -> HomeScreen(controller.macs, controller.homeNote, controller::pick, controller::openSettings)
+                        is Screen.Connecting -> ConnectingScreen(screen.macName, controller::leave, controller::openSettings)
                         is Screen.Pairing -> PairingScreen(screen.macName, screen.code, controller::leave)
-                        is Screen.Pad -> PadScreen(screen.macName, screen.live, controller)
+                        is Screen.Pad ->
+                            PadScreen(
+                                screen.macName,
+                                screen.live,
+                                controller,
+                                settings.value,
+                                settings.photoFile,
+                                settings.photoVersion,
+                            )
                         is Screen.Error -> ErrorScreen(screen.message, controller::leave)
                     }
                 }
@@ -93,7 +111,8 @@ class MainActivity : ComponentActivity() {
         }
         window.attributes =
             window.attributes.apply {
-                screenBrightness = if (on) PAD_BRIGHTNESS else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                screenBrightness =
+                    if (on) settings.value.effectiveBrightness else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         setWifiLock(on)
     }
@@ -121,7 +140,6 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val PAD_BRIGHTNESS = 0.05f
         private const val ACTION_TRACKPAD = "app.magicpad.action.TRACKPAD"
 
         /** Opens the app and auto-connects to the last Mac (also used by shortcuts.xml). */

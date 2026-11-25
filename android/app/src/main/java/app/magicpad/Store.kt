@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.core.content.edit
 import app.magicpad.net.Crypto
 import app.magicpad.net.toHex
+import app.magicpad.settings.PadBackground
+import app.magicpad.settings.PadSettings
 import java.util.Base64
 
 /** This phone's id and the pairing key for each Mac, in private app storage. */
@@ -38,10 +40,34 @@ class Store(
         putString(KEY_LAST_NAME, name)
     }
 
+    fun loadPadSettings(): PadSettings =
+        PadSettings(
+            background = PadBackground.fromKey(prefs.getString(KEY_BACKGROUND, null)),
+            photoDim = prefs.getFloat(KEY_PHOTO_DIM, PadSettings.DEFAULT_PHOTO_DIM),
+            brightness = if (prefs.contains(KEY_BRIGHTNESS)) prefs.getFloat(KEY_BRIGHTNESS, 0f) else null,
+        )
+
+    fun savePadSettings(settings: PadSettings) =
+        prefs.edit {
+            putString(KEY_BACKGROUND, settings.background.key)
+            putFloat(KEY_PHOTO_DIM, settings.photoDim)
+            val b = settings.brightness
+            if (b == null) remove(KEY_BRIGHTNESS) else putFloat(KEY_BRIGHTNESS, b)
+        }
+
+    /** Changes whenever a new pad photo is saved; 0 = none yet. */
+    var photoVersion: Long
+        get() = prefs.getLong(KEY_PHOTO_VERSION, 0L)
+        set(value) = prefs.edit { putLong(KEY_PHOTO_VERSION, value) }
+
     private companion object {
         const val KEY_DEVICE = "device_id"
         const val KEY_PAIR = "pair_"
         const val KEY_LAST_ID = "last_mac_id"
         const val KEY_LAST_NAME = "last_mac_name"
+        const val KEY_BACKGROUND = "pad_background"
+        const val KEY_PHOTO_DIM = "pad_photo_dim"
+        const val KEY_BRIGHTNESS = "pad_brightness"
+        const val KEY_PHOTO_VERSION = "pad_photo_version"
     }
 }

@@ -1,10 +1,10 @@
 package app.magicpad
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,28 +16,33 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 
 @Composable
 fun HomeScreen(
     macs: List<MacService>,
     note: String?,
     onPick: (MacService) -> Unit,
+    onSettings: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
-        Text("MagicPad", style = MaterialTheme.typography.headlineMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("MagicPad", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = onSettings) { Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings") }
+        }
         Text(
             "Open MagicPad on your Mac. Both devices need to be on the same Wi-Fi.",
             style = MaterialTheme.typography.bodyMedium,
@@ -76,11 +81,15 @@ fun HomeScreen(
 fun ConnectingScreen(
     macName: String,
     onCancel: () -> Unit,
+    onSettings: () -> Unit,
 ) = Centered {
     CircularProgressIndicator()
     Spacer(Modifier.height(16.dp))
     Text("Connecting to $macName…")
-    TextButton(onClick = onCancel) { Text("Cancel") }
+    Row {
+        TextButton(onClick = onCancel) { Text("Cancel") }
+        TextButton(onClick = onSettings) { Text("Settings") }
+    }
 }
 
 @Composable
@@ -110,26 +119,6 @@ fun ErrorScreen(
     Text(message, textAlign = TextAlign.Center)
     Spacer(Modifier.height(12.dp))
     TextButton(onClick = onOk) { Text("OK") }
-}
-
-@Composable
-fun PadScreen(
-    macName: String,
-    live: Boolean,
-    controller: Controller,
-) {
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(
-            factory = { context -> PadView(context, controller::onTouches) },
-            modifier = Modifier.fillMaxSize(),
-        )
-        Text(
-            if (live) macName else "Reconnecting to $macName…",
-            color = Color.White.copy(alpha = if (live) 0.25f else 0.6f),
-            fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
-        )
-    }
 }
 
 @Composable
