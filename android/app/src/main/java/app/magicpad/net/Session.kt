@@ -21,9 +21,32 @@ sealed interface SessionEnd {
     /** The Mac doesn't know this phone (or its key changed) and pairing wasn't allowed. */
     data object NeedsPairing : SessionEnd
 
+    /** [reason] is technical, for logs; [kind] decides what the user is told. */
     data class Failed(
         val reason: String,
+        val kind: FailKind,
     ) : SessionEnd
+}
+
+/** What went wrong, in terms the user can act on. */
+enum class FailKind {
+    /** Couldn't open a connection at all. */
+    UNREACHABLE,
+
+    /** Connected, then the Mac went quiet. */
+    NO_RESPONSE,
+
+    /** The connection dropped. */
+    LOST,
+
+    /** The pairing request wasn't answered on the Mac in time. */
+    PAIRING_TIMEOUT,
+
+    /** The Mac sent something this app doesn't understand: different versions. */
+    INCOMPATIBLE,
+
+    /** The secure handshake didn't check out. */
+    SECURITY,
 }
 
 interface SessionListener {
@@ -38,6 +61,9 @@ interface SessionListener {
         kind: HapticKind,
         strength: Double?,
     )
+
+    /** Whether the Mac is allowed to move the pointer (its Accessibility switch). */
+    fun onMacAccess(allowed: Boolean)
 }
 
 /**
@@ -61,6 +87,12 @@ class Session(
 
     @Volatile private var live = false
 
+    /** Whether this session got as far as `ready` (it may have ended since). */
+    @Volatile var reachedReady = false
+        private set
+
+    @Volatile private var pairing = false
+
     /** Sends shortcut actions off the caller's (UI) thread, in order. */
     private val actions =
         Executors.newSingleThreadExecutor { r -> Thread(r, "magicpad-action").apply { isDaemon = true } }
@@ -71,7 +103,7 @@ class Session(
             try {
                 ControlChannel(host, port)
             } catch (_: IOException) {
-                return SessionEnd.Failed("Can't reach the Mac")
+                return SessionEnd.Failed("Can't reach the Mac", FailKind.UNREACHABLE)
             }
         channel = ch
         var sender: FrameSender? = null
@@ -83,20 +115,25 @@ class Session(
             listener.onReady(ready.macName, sender)
             ch.setTimeout(LIVE_TIMEOUT_MS)
             live = true
+            reachedReady = true
             pinger = startPinger(ch)
             liveLoop(ch)
         } catch (_: NeedsPairing) {
             SessionEnd.NeedsPairing
         } catch (_: SocketTimeoutException) {
-            if (closed) SessionEnd.Closed else SessionEnd.Failed("The Mac stopped responding")
+            when {
+                closed -> SessionEnd.Closed
+                pairing -> SessionEnd.Failed("No answer to the pairing request", FailKind.PAIRING_TIMEOUT)
+                else -> SessionEnd.Failed("The Mac stopped responding", FailKind.NO_RESPONSE)
+            }
         } catch (e: IOException) {
-            if (closed) SessionEnd.Closed else SessionEnd.Failed("Connection lost (${e.message})")
+            if (closed) SessionEnd.Closed else SessionEnd.Failed("Connection lost (${e.message})", FailKind.LOST)
         } catch (e: JSONException) {
-            SessionEnd.Failed("Unexpected message from the Mac (${e.message})")
+            SessionEnd.Failed("Unexpected message from the Mac (${e.message})", FailKind.INCOMPATIBLE)
         } catch (e: GeneralSecurityException) {
-            SessionEnd.Failed("Secure handshake failed (${e.message})")
+            SessionEnd.Failed("Secure handshake failed (${e.message})", FailKind.SECURITY)
         } catch (e: IllegalArgumentException) {
-            SessionEnd.Failed("Unexpected message from the Mac (${e.message})")
+            SessionEnd.Failed("Unexpected message from the Mac (${e.message})", FailKind.INCOMPATIBLE)
         } finally {
             live = false
             actions.shutdownNow()
@@ -178,11 +215,13 @@ class Session(
             ch.send("pair")
             listener.onPairing(Crypto.pairingCode(shared, salt))
             ch.setTimeout(PAIRING_TIMEOUT_MS)
+            pairing = true
             when (next(ch).getString("t")) {
                 "paired" -> Unit
                 "denied" -> return null
                 else -> throw IllegalArgumentException("expected paired")
             }
+            pairing = false
             key = Crypto.pairingKey(shared, salt)
             store.savePairingKey(macId, key)
             ch.setTimeout(HANDSHAKE_TIMEOUT_MS)
@@ -217,6 +256,7 @@ class Session(
             val msg = ch.receive()
             when (msg.optString("t")) {
                 "buzz" -> listener.onBuzz(buzzKind(msg), buzzStrength(msg))
+                "status" -> if (msg.has("access")) listener.onMacAccess(msg.optBoolean("access", true))
                 "bye" -> return SessionEnd.Closed
                 "denied" -> return SessionEnd.Denied
                 else -> Unit // ping or unknown: any message resets the timeout.

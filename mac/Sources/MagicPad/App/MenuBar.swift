@@ -26,11 +26,15 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
         updateIcon()
 
         server.ui = self
+        server.setAccess(trusted)  // before any phone connects
         server.start()
 
         if !trusted { CGRequestPostEventAccess() }
         // The icon turns white (or dims) the moment the Accessibility switch changes.
-        access.onChange = { [weak self] _ in self?.updateIcon() }
+        access.onChange = { [weak self] granted in
+            self?.server.setAccess(granted)
+            self?.updateIcon()
+        }
         access.onStaleGrant = { [weak self] in
             guard let self, !self.restarting, Bundle.main.bundleURL.pathExtension == "app" else { return }
             // At most once a minute, so a mismatch that a restart doesn't fix can't loop.
@@ -91,6 +95,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
             ? "Waiting for your phone…"
             : "Connected: " + server.connected.joined(separator: ", ")
         menu.addItem(disabled(status))
+        if let problem = server.problem { menu.addItem(disabled("⚠️ " + problem)) }
         if !trusted {
             menu.addItem(action("⚠️ Allow Accessibility access…", #selector(openAccessibility)))
             // Normally the app restarts itself once access is on; this is the manual way.

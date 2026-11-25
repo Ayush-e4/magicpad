@@ -30,7 +30,11 @@ class Discovery(
     private var resolving = false
     private var listener: NsdManager.DiscoveryListener? = null
 
+    /** Between start() and stop(): a failed start is retried while this is true. */
+    private var wanted = false
+
     fun start() {
+        wanted = true
         if (listener != null) return
         // Forget Macs from before a stop: only what answers now counts for auto-connect.
         if (found.isNotEmpty()) {
@@ -47,7 +51,11 @@ class Discovery(
                     serviceType: String,
                     errorCode: Int,
                 ) {
-                    main.post { listener = null }
+                    // Android sometimes refuses (e.g. right after Wi-Fi changes): try again shortly.
+                    main.post {
+                        listener = null
+                        main.postDelayed({ if (wanted) start() }, RETRY_MS)
+                    }
                 }
 
                 override fun onStopDiscoveryFailed(
@@ -73,6 +81,7 @@ class Discovery(
     }
 
     fun stop() {
+        wanted = false
         val l = listener ?: return
         listener = null
         try {
@@ -81,6 +90,13 @@ class Discovery(
             // Discovery never started.
         }
         pending.clear()
+    }
+
+    /** Starts over (e.g. on a new Wi-Fi network), if discovery is wanted right now. */
+    fun restart() {
+        if (!wanted) return
+        stop()
+        start()
     }
 
     /** The latest address for the Mac with this id, if it is still advertising. */
@@ -125,5 +141,6 @@ class Discovery(
 
     private companion object {
         const val SERVICE_TYPE = "_magicpad._tcp"
+        const val RETRY_MS = 3000L
     }
 }

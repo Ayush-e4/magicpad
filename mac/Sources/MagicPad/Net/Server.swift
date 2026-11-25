@@ -4,6 +4,7 @@ import Network
 /// What the server needs from the UI (the menu-bar app). Main queue only.
 protocol ServerUI: AnyObject {
     func askToPair(phone: String, code: String, reply: @escaping (Bool) -> Void)
+    /// Phones connected, or the network problem, changed.
     func phonesChanged()
 }
 
@@ -20,6 +21,12 @@ final class Server: SessionDelegate {
     private let lock = NSLock()
     private var live: [UInt32: Session] = [:]  // ready sessions, by sid
     private var pending: [ObjectIdentifier: Session] = [:]  // all sessions, keeps them alive
+
+    /// Why phones can't connect right now, for the menu, or nil (main queue).
+    private(set) var problem: String?
+
+    /// Whether this Mac may move the pointer; sent to each phone (guarded by `lock`).
+    private var accessAllowed = true
 
     /// Names of the phones connected right now (main queue).
     private(set) var connected: [String] = [] {
@@ -42,6 +49,7 @@ final class Server: SessionDelegate {
             try startTCP()
         } catch {
             Log.info("could not start the network listener: \(error); retrying in 3 s")
+            report("Can't listen for phones on this network. Retrying…")
             queue.asyncAfter(deadline: .now() + 3) { self.start() }
         }
     }
@@ -59,8 +67,10 @@ final class Server: SessionDelegate {
             switch state {
             case .ready:
                 Log.info("listening on port \(l.port?.rawValue ?? 0), advertising _magicpad._tcp")
+                self?.report(nil)
             case .failed(let err):
                 Log.info("listener failed: \(err); restarting")
+                self?.report("Can't listen for phones on this network. Retrying…")
                 l.cancel()
                 self?.queue.asyncAfter(deadline: .now() + 2) { try? self?.startTCP() }
             default: break
@@ -72,7 +82,8 @@ final class Server: SessionDelegate {
 
     private func accept(_ conn: NWConnection) {
         let session = Session(channel: ControlChannel(conn, queue: queue), store: store, cfg: cfg,
-                              queue: queue, udpPort: { [weak self] in self?.frames.port ?? 0 })
+                              queue: queue, udpPort: { [weak self] in self?.frames.port ?? 0 },
+                              macAccess: { [weak self] in self?.isAccessAllowed ?? true })
         session.delegate = self
         lock.lock(); pending[ObjectIdentifier(session)] = session; lock.unlock()
         session.start()
@@ -109,6 +120,29 @@ final class Server: SessionDelegate {
         } else if !on, let a = latencyActivity {
             ProcessInfo.processInfo.endActivity(a)
             latencyActivity = nil
+        }
+    }
+
+    /// The Accessibility switch changed (main queue): tell every connected phone.
+    func setAccess(_ allowed: Bool) {
+        lock.lock()
+        accessAllowed = allowed
+        let sessions = Array(live.values)
+        lock.unlock()
+        sessions.forEach { $0.sendAccess(allowed) }
+    }
+
+    private var isAccessAllowed: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return accessAllowed
+    }
+
+    /// Shows (or clears) a network problem in the menu.
+    private func report(_ text: String?) {
+        DispatchQueue.main.async {
+            guard self.problem != text else { return }
+            self.problem = text
+            self.ui?.phonesChanged()
         }
     }
 

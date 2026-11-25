@@ -13,14 +13,17 @@ sealed interface Screen {
         val code: String,
     ) : Screen
 
-    /** [live] is false while reconnecting. */
+    /** [live] is false while reconnecting; [trouble] is set once reconnecting has failed for a while. */
     data class Pad(
         val macName: String,
         val live: Boolean,
+        val trouble: Problem? = null,
     ) : Screen
 
+    /** [mac] is what "Try again" reconnects to. */
     data class Error(
-        val message: String,
+        val problem: Problem,
+        val mac: MacService?,
     ) : Screen
 
     /** Settings, and where Back goes afterwards. */

@@ -24,6 +24,7 @@ final class Session: HapticOutput {
     private let store: PairingStore
     private var cfg: Config
     private let udpPort: () -> UInt16
+    private let macAccess: () -> Bool
     private let queue: DispatchQueue
     let engineQueue = DispatchQueue(label: "magicpad.engine", qos: .userInteractive)
 
@@ -43,12 +44,13 @@ final class Session: HapticOutput {
     private var watchdog: DispatchSourceTimer?
 
     init(channel: ControlChannel, store: PairingStore, cfg: Config,
-         queue: DispatchQueue, udpPort: @escaping () -> UInt16) {
+         queue: DispatchQueue, udpPort: @escaping () -> UInt16, macAccess: @escaping () -> Bool) {
         self.channel = channel
         self.store = store
         self.cfg = cfg
         self.queue = queue
         self.udpPort = udpPort
+        self.macAccess = macAccess
         channel.onMessage = { [weak self] in self?.handle($0) }
         channel.onClose = { [weak self] in self?.ended() }
     }
@@ -87,6 +89,14 @@ final class Session: HapticOutput {
         default:
             Log.info("unexpected \(m["t"] ?? "?") from \(phoneName), closing")
             channel.close()
+        }
+    }
+
+    /// Tells the phone whether this Mac may move the pointer (its Accessibility switch).
+    func sendAccess(_ allowed: Bool) {
+        queue.async {
+            guard self.state == .ready else { return }
+            self.channel.send(["t": "status", "access": allowed])
         }
     }
 
@@ -160,6 +170,8 @@ final class Session: HapticOutput {
             "t": "ready", "proof": hs.proof("mac", pairing: k).base64EncodedString(),
             "udp": Int(udpPort()), "sid": Int(sid),
         ])
+        // So the phone can explain a pointer that doesn't move.
+        channel.send(["t": "status", "access": macAccess()])
         Log.info("\(phoneName) connected")
         DispatchQueue.main.async { self.delegate?.sessionDidBecomeReady(self) }
     }
