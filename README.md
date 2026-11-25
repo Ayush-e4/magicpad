@@ -29,7 +29,8 @@ Get `MagicPad-mac.zip` and `MagicPad.apk` from the
    xattr -dr com.apple.quarantine /Applications/MagicPad.app
    ```
    Then open it. Give it **Accessibility** permission when macOS asks, and allow
-   **Local Network** access.
+   **Local Network** access. If the menu-bar icon stays dimmed after you allow it,
+   choose **Restart MagicPad** from its menu.
 2. Install `MagicPad.apk` on the phone. Your browser or file manager will ask you
    to allow installing unknown apps.
 3. Put the phone and the Mac on the same Wi-Fi network. Open MagicPad on the phone,
@@ -55,7 +56,13 @@ priority network packets. The network itself matters most:
    make install-app    # builds dist/MagicPad.app, copies it to ~/Applications and opens it
    ```
    Give it **Accessibility** permission when macOS asks, and allow
-   **Local Network** access.
+   **Local Network** access. If the icon stays dimmed after you allow it, choose
+   **Restart MagicPad** from its menu.
+
+   To keep that permission across rebuilds, run `make signing-cert` once first. It
+   adds a signing certificate for this Mac to your login keychain, and `make app`
+   signs with it from then on. Without it, the app is ad-hoc signed and macOS asks
+   again after every rebuild.
 2. Build and install the Android app with the phone plugged in (USB debugging on):
    ```sh
    cd android && ./gradlew installDebug
