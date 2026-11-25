@@ -89,6 +89,14 @@ fun PadScreen(
             style = TextStyle(fontSize = 12.sp, shadow = Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f), blurRadius = 6f)),
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
+        if (settings.shortcuts) {
+            ShortcutStrip(
+                settings.stripSide,
+                settings.stripPlace,
+                controller::runShortcut,
+                Modifier.align(stripAlignment(settings.stripSide, settings.stripPlace)),
+            )
+        }
         // Above PadView: Compose hit-tests it first, so touches that start here never reach the Mac.
         SettingsGear(controller::openSettings, Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp))
     }
