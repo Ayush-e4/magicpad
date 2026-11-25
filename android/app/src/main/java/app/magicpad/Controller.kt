@@ -11,6 +11,7 @@ import app.magicpad.net.Session
 import app.magicpad.net.SessionEnd
 import app.magicpad.net.SessionListener
 import app.magicpad.net.TouchPoint
+import app.magicpad.pad.Shortcut
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,6 +151,12 @@ class Controller(
         timeMs: Long,
     ) {
         sender?.update(touches, widthMm, heightMm, timeMs)
+    }
+
+    /** A shortcut button on the pad: buzz right away, then ask the Mac to run it. */
+    fun runShortcut(shortcut: Shortcut) {
+        haptics.play(HapticKind.CLICK, null)
+        session?.sendAction(shortcut.wire)
     }
 
     /** SMART (launcher) or DIRECT (tile/shortcut); a DIRECT request overrides a pending SMART one. */

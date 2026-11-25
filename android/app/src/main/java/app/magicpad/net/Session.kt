@@ -9,6 +9,8 @@ import java.net.InetAddress
 import java.net.SocketTimeoutException
 import java.security.GeneralSecurityException
 import java.util.Base64
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 /** Why a session ended. [Failed] sessions are worth retrying; [Denied] ones are not. */
 sealed interface SessionEnd {
@@ -57,6 +59,12 @@ class Session(
 
     @Volatile private var closed = false
 
+    @Volatile private var live = false
+
+    /** Sends shortcut actions off the caller's (UI) thread, in order. */
+    private val actions =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "magicpad-action").apply { isDaemon = true } }
+
     /** Blocks until the session ends. Call on a background thread. */
     fun run(): SessionEnd {
         val ch =
@@ -74,6 +82,7 @@ class Session(
             sender = FrameSender(ch.remoteAddress, ready.udpPort, ready.sid, ready.sessionKey)
             listener.onReady(ready.macName, sender)
             ch.setTimeout(LIVE_TIMEOUT_MS)
+            live = true
             pinger = startPinger(ch)
             liveLoop(ch)
         } catch (_: NeedsPairing) {
@@ -89,9 +98,28 @@ class Session(
         } catch (e: IllegalArgumentException) {
             SessionEnd.Failed("Unexpected message from the Mac (${e.message})")
         } finally {
+            live = false
+            actions.shutdownNow()
             pinger?.interrupt()
             sender?.close()
             ch.close()
+        }
+    }
+
+    /** Asks the Mac to run a shortcut ([wire] is its `a`). Any thread; dropped if not connected. */
+    fun sendAction(wire: String) {
+        val ch = channel ?: return
+        if (!live) return
+        try {
+            actions.execute {
+                try {
+                    ch.send(JSONObject().put("t", "action").put("a", wire))
+                } catch (_: IOException) {
+                    // The reader sees the broken socket and ends the session.
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            // Session just ended.
         }
     }
 

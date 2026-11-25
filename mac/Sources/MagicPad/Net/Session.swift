@@ -82,10 +82,20 @@ final class Session: HapticOutput {
         case (.hello, "hello"): hello(m)
         case (.pairing, "pair"): pair()
         case (.pairing, "auth"), (.auth, "auth"): auth(m)
+        case (.ready, "action"): action(m)
+        case (.ready, _): break  // a newer phone's message this Mac doesn't know: ignore it
         default:
             Log.info("unexpected \(m["t"] ?? "?") from \(phoneName), closing")
             channel.close()
         }
+    }
+
+    /// A shortcut button on the phone. Unknown actions are ignored.
+    private func action(_ m: ControlChannel.Message) {
+        guard let name = m["a"] as? String, let a = ShortcutAction(rawValue: name) else {
+            return Log.info("unknown action \(m["a"] ?? "?") from \(phoneName)")
+        }
+        DispatchQueue.main.async { a.perform() }
     }
 
     private func hello(_ m: ControlChannel.Message) {

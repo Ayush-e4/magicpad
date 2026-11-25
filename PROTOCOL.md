@@ -75,6 +75,18 @@ Session key: `S = HKDF(shared ‖ K, "magicpad v1 session", 32)`.
   | `tick` | every few lines of scrolling (if enabled on the Mac) | very light tick |
 
   The Mac sends nothing when haptics are off.
+- phone → Mac `{"t":"action","a":"<action>"}`: a shortcut button was tapped.
+  The Mac runs it as if pressed on its own keyboard, and ignores unknown actions:
+
+  | `a` | Does |
+  |---|---|
+  | `media.playpause` | play / pause (media key) |
+  | `media.next` | next track (media key) |
+  | `media.previous` | previous track (media key) |
+  | `screenshot.screen` | screenshot of the whole screen to the Desktop (⌘⇧3) |
+
+- After `ready`, the Mac ignores message types it doesn't know, so newer phones
+  can add messages without breaking older Macs.
 - Either side `{"t":"ping"}` every 2 s. No message for 6 s → close.
 - phone → Mac `{"t":"bye"}` before a clean close (optional).
 

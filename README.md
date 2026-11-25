@@ -72,8 +72,9 @@ priority network packets. The network itself matters most:
    tap your Mac, and check that the pairing code matches on both screens.
 
 The menu-bar app has pointer speed, haptics, paired phones and start at login.
-On the phone, the settings gear changes the pad background and auto-connect,
-and there's a Quick Settings tile. The wire format is in [PROTOCOL.md](PROTOCOL.md).
+On the phone, the settings gear changes the pad background and auto-connect, and
+turns on **shortcut buttons**: previous, play/pause, next and screenshot, on the left
+or right of the pad, at the top, middle or bottom. There's also a Quick Settings tile. The wire format is in [PROTOCOL.md](PROTOCOL.md).
 
 ## USB mode
 

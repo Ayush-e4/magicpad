@@ -30,6 +30,10 @@ data class PadSettings(
     val brightness: Float? = null,
     /** Skip the list on open when only the last-used Mac is around. */
     val autoConnect: Boolean = false, // off: opening the app waits for the user to pick a Mac
+    /** Shortcut buttons (play/pause, screenshot…) on the pad. */
+    val shortcuts: Boolean = false,
+    val stripSide: StripSide = StripSide.LEFT,
+    val stripPlace: StripPlace = StripPlace.MIDDLE,
 ) {
     /** Window screenBrightness to use on the pad, 0.01–1. */
     val effectiveBrightness: Float get() = brightness ?: defaultBrightness(background)
@@ -42,6 +46,12 @@ data class PadSettings(
     fun withPhotoDim(value: Float) = copy(photoDim = value.coerceIn(0f, MAX_PHOTO_DIM))
 
     fun withAutoConnect(on: Boolean) = copy(autoConnect = on)
+
+    fun withShortcuts(on: Boolean) = copy(shortcuts = on)
+
+    fun withStripSide(side: StripSide) = copy(stripSide = side)
+
+    fun withStripPlace(place: StripPlace) = copy(stripPlace = place)
 
     companion object {
         const val MIN_BRIGHTNESS = 0.01f

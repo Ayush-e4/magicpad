@@ -113,6 +113,58 @@ fun SettingsScreen(
             range = PadSettings.MIN_BRIGHTNESS..PadSettings.MAX_BRIGHTNESS,
             onChange = { v -> model.update { it.withBrightness(v) } },
         )
+        Spacer(Modifier.height(16.dp))
+        ShortcutSection(model)
+    }
+}
+
+@Composable
+private fun ShortcutSection(model: SettingsModel) {
+    val s = model.value
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = s.shortcuts, role = Role.Switch) { on -> model.update { it.withShortcuts(on) } }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Shortcut buttons", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Previous, play/pause, next and screenshot on the pad",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = s.shortcuts, onCheckedChange = null)
+    }
+    if (!s.shortcuts) return
+    ChoiceRow("Side", StripSide.entries, s.stripSide, { it.label }) { side -> model.update { it.withStripSide(side) } }
+    ChoiceRow("Position", StripPlace.entries, s.stripPlace, { it.label }) { place -> model.update { it.withStripPlace(place) } }
+}
+
+/** A label and a row of radio buttons, one per option. */
+@Composable
+private fun <T> ChoiceRow(
+    label: String,
+    options: List<T>,
+    selected: T,
+    name: (T) -> String,
+    onPick: (T) -> Unit,
+) {
+    Row(Modifier.padding(horizontal = 8.dp).selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.size(width = 72.dp, height = 24.dp))
+        for (option in options) {
+            Row(
+                Modifier
+                    .selectable(selected = option == selected, role = Role.RadioButton) { onPick(option) }
+                    .padding(end = 12.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = option == selected, onClick = null)
+                Text(name(option), Modifier.padding(start = 4.dp))
+            }
+        }
     }
 }
 
