@@ -6,6 +6,7 @@ let usage = """
 
     usage:
       magicpad [run] [--debug] [--no-grab]   start (waits for the phone)
+      magicpad app [--debug]                 Wi-Fi menu-bar app (what MagicPad.app runs)
       magicpad install                       run in the background at login
       magicpad uninstall                     remove the background agent
       magicpad config                        create/show the config file path
@@ -18,6 +19,11 @@ let usage = """
     """
 
 var args = Array(CommandLine.arguments.dropFirst())
+
+// Launched as MagicPad.app (Finder, login item): run the Wi-Fi menu-bar app.
+if Bundle.main.bundleURL.pathExtension == "app" && args.allSatisfy({ $0.hasPrefix("-psn") }) {
+    MenuBarApp.run()
+}
 let command = args.first.flatMap { $0.hasPrefix("-") ? nil : $0 } ?? "run"
 if args.first == command { args.removeFirst() }
 
@@ -27,6 +33,10 @@ case "run":
     let runner = Runner(cfg: Config.load(), grab: !args.contains("--no-grab"))
     runner.start()
     dispatchMain()
+
+case "app":
+    Log.debug = args.contains("--debug")
+    MenuBarApp.run()
 
 case "install":
     LaunchAgent.install()

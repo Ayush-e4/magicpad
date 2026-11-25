@@ -1,11 +1,26 @@
 SDK      ?= $(HOME)/Library/Android/sdk
 NDK      ?= $(SDK)/ndk/$(shell ls $(SDK)/ndk | tail -1)
 ANDROID_CC = $(NDK)/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android29-clang
-SWIFT_SRC  = $(wildcard mac/Sources/MagicPad/*.swift) mac/Package.swift
+SWIFT_SRC  = $(shell find mac/Sources -name '*.swift') mac/Package.swift
+APP        = dist/MagicPad.app
 
-.PHONY: all run debug install uninstall clean
+.PHONY: all app install-app run debug install uninstall clean
 
 all: bin/magicpad bin/magicpad-grab
+
+# Wi-Fi menu-bar app (ad-hoc signed).
+app: bin/magicpad mac/Info.plist
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS
+	cp mac/Info.plist $(APP)/Contents/Info.plist
+	cp bin/magicpad $(APP)/Contents/MacOS/magicpad
+	codesign --force --sign - --identifier app.magicpad.mac $(APP)
+
+install-app: app
+	rm -rf ~/Applications/MagicPad.app
+	mkdir -p ~/Applications
+	cp -R $(APP) ~/Applications/MagicPad.app
+	open ~/Applications/MagicPad.app
 
 bin/magicpad-grab: phone/grab.c
 	@mkdir -p bin
@@ -29,4 +44,4 @@ uninstall:
 	./bin/magicpad uninstall
 
 clean:
-	rm -rf bin mac/.build
+	rm -rf bin mac/.build dist

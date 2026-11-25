@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher long-press: same as the Quick Settings tile (open and auto-connect). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="trackpad"
+        android:shortcutShortLabel="@string/trackpad">
+        <intent
+            android:action="app.magicpad.action.TRACKPAD"
+            android:targetClass="app.magicpad.MainActivity"
+            android:targetPackage="app.magicpad" />
+    </shortcut>
+</shortcuts>

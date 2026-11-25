@@ -13,7 +13,7 @@ struct Config: Codable {
 
     // Pointer: gain is points of cursor travel per mm of finger travel,
     // blended from minGain (slow) to maxGain (fast) by finger speed.
-    var pointerSpeed: Double = 1.0
+    var pointerSpeed: Double = 2.0
     var minGain: Double = 2.5
     var maxGain: Double = 16.0
     var accelVelocity: Double = 320  // mm/s at which maxGain is reached
@@ -38,6 +38,8 @@ struct Config: Codable {
 
     // Phone
     var haptics: Bool = true
+    var hapticStrength: Double = 0.7  // Wi-Fi app: 0.0–1.0
+    var scrollTicks: Bool = false     // light tick every few lines of scrolling
     var hapticMs: Int = 14
     var hapticAmplitude: Int = 180  // 1-255
     var dimScreen: Bool = true
@@ -63,6 +65,17 @@ struct Config: Codable {
             return defaults
         }
         return cfg
+    }
+
+    func save() {
+        do {
+            try FileManager.default.createDirectory(at: Config.dir, withIntermediateDirectories: true)
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try enc.encode(self).write(to: Config.url, options: .atomic)
+        } catch {
+            Log.info("could not save config: \(error.localizedDescription)")
+        }
     }
 
     /// Writes the default config (only if none exists) and returns its path.

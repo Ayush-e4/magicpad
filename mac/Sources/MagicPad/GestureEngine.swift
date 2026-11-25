@@ -14,14 +14,14 @@ final class GestureEngine {
         case swipe(DockSwipe), dockPinch
     }
 
-    private let cfg: Config
+    var cfg: Config  // replaced live when settings change
     private let poster: EventPoster
     private let sys = SystemGestures()
     private let momentum: Momentum
     private let queue: DispatchQueue
     private let natural: Bool
     private let threeDrag: Bool
-    var haptics: Haptics?
+    var haptics: HapticOutput?
 
     // Session state (times are on the phone's clock)
     private var mode: Mode = .idle
@@ -43,6 +43,7 @@ final class GestureEngine {
     private var lastScrollMove = 0.0
     private var swipeOffset = 0.0
     private var swipeVel = 0.0
+    private var scrollTickTravel = 0.0
 
     // Tap history
     private var lastTapTime = -10.0
@@ -142,6 +143,7 @@ final class GestureEngine {
             finishPinchRotate()
         case .swipe(.horizontal):
             sys.dockSwipe(.horizontal, progress: swipeOffset, phase: .ended, velocity: swipeVel)
+            if abs(swipeOffset) > 0.35 { buzz(.confirm) }  // far enough that macOS switches
         case .swipe, .dockPinch, .idle, .ignore:
             break
         }
@@ -178,6 +180,7 @@ final class GestureEngine {
             if tapDragArmed && t - sessionStart < 0.5 {
                 poster.leftDown()
                 mode = .tapDrag
+                buzz(.drag)
             } else {
                 mode = .pointer
             }
@@ -187,6 +190,7 @@ final class GestureEngine {
             if travel >= spreadChange && travel >= arc {
                 mode = .scroll
                 scrollVel = (0, 0)
+                scrollTickTravel = 0
                 poster.scroll(dx: 0, dy: 0, phase: 1)
             } else if spreadChange >= arc {
                 mode = .zoom
@@ -199,6 +203,7 @@ final class GestureEngine {
             guard travel > 0.8 else { return }
             poster.leftDown()
             mode = .threeDrag
+            buzz(.drag)
         default:
             if c.count >= 4 && spreadChange > 4 && spreadChange > travel {
                 startDockGesture(.pinch, c, r)
@@ -272,7 +277,7 @@ final class GestureEngine {
             : (swipeOffset < 0 ? .apps : .showDesktop)
         Log.dbg("dock action \(action)")
         DispatchQueue.main.async { Dock.perform(action) }
-        buzz()
+        buzz(.confirm)
         mode = .ignore
     }
 
@@ -291,6 +296,13 @@ final class GestureEngine {
         scrollVel.x = 0.5 * scrollVel.x + 0.5 * px / dt
         scrollVel.y = 0.5 * scrollVel.y + 0.5 * py / dt
         if hypot(dx, dy) > 0.02 { lastScrollMove = t }
+        if cfg.scrollTicks {
+            scrollTickTravel += hypot(px, py)
+            if scrollTickTravel >= 60 {  // about three lines of text
+                scrollTickTravel = 0
+                buzz(.tick)
+            }
+        }
     }
 
     private func finishScroll(momentum withMomentum: Bool) {
@@ -312,23 +324,23 @@ final class GestureEngine {
         case 1:
             clickCount = t - lastTapTime < NSEvent.doubleClickInterval ? min(clickCount + 1, 3) : 1
             poster.click(.left, clickState: Int64(clickCount))
-            buzz()
+            buzz(.click)
             lastTapTime = t
         case 2:
-            guard cfg.smartZoom else { poster.click(.right); buzz(); return }
+            guard cfg.smartZoom else { poster.click(.right); buzz(.heavy); return }
             // Hold the right-click briefly so a second two-finger tap can
             // turn it into Smart Zoom instead (what macOS does too).
             if let pending = pendingRightClick, t - lastTwoTapTime < 0.35 {
                 pending.cancel()
                 pendingRightClick = nil
                 sys.smartZoom(at: poster.cursor)
-                buzz()
+                buzz(.confirm)
             } else {
                 let work = DispatchWorkItem { [weak self] in
                     guard let self else { return }
                     self.pendingRightClick = nil
                     self.poster.click(.right)
-                    self.buzz()
+                    self.buzz(.heavy)
                 }
                 pendingRightClick = work
                 queue.asyncAfter(deadline: .now() + 0.25, execute: work)
@@ -336,13 +348,23 @@ final class GestureEngine {
             lastTwoTapTime = t
         case 3:
             poster.key(2, flags: [.maskControl, .maskCommand])  // Look Up (⌃⌘D)
-            buzz()
+            buzz(.confirm)
         default:
             break
         }
     }
 
-    private func buzz() {
-        if cfg.haptics { haptics?.tick() }
+    private func buzz(_ kind: HapticKind) {
+        if cfg.haptics { haptics?.play(kind) }
     }
+}
+
+/// The haptic kinds of PROTOCOL.md (`buzz` → `k`).
+enum HapticKind: String {
+    case click, heavy, drag, confirm, tick
+}
+
+/// Where the engine sends haptics: adb over USB, or the Wi-Fi session.
+protocol HapticOutput: AnyObject {
+    func play(_ kind: HapticKind)
 }

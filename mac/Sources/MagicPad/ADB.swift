@@ -149,7 +149,7 @@ final class Phone {
 
 /// Fires short vibrations through one long-lived `adb shell`, so each buzz
 /// costs a pipe write instead of a new adb connection.
-final class Haptics {
+final class Haptics: HapticOutput {
     private var process: Process?
     private var input: FileHandle?
     private let line: Data
@@ -171,7 +171,8 @@ final class Haptics {
         }
     }
 
-    func tick() {
+    func play(_ kind: HapticKind) {
+        guard kind != .tick else { return }  // too frequent for adb shell
         guard let input, process?.isRunning == true else { return }
         try? input.write(contentsOf: line)
     }
