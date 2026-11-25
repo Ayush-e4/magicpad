@@ -27,7 +27,7 @@ CryptoKit `derRepresentation`). Nonces are 16 random bytes, base64.
 1. phone → Mac:
    `{"t":"hello","v":1,"device":"<32 hex>","name":"Galaxy S21 FE","pub":"…","nonce":"…"}`
 2. Mac → phone:
-   `{"t":"hello","v":1,"id":"<32 hex>","name":"Ayush's MacBook","pub":"…","nonce":"…","known":true|false}`
+   `{"t":"hello","v":1,"id":"<32 hex>","name":"My MacBook","pub":"…","nonce":"…","known":true|false}`
    `known` says whether the Mac has a pairing key for this `device`.
 
 Both compute `shared` = ECDH(own private, other public) (32 bytes, raw X

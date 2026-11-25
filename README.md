@@ -1,6 +1,39 @@
 # MagicPad
 
-Use an Android phone as a Mac trackpad over USB. No root and no Android app needed.
+Use an Android phone as a Mac trackpad, with full macOS gestures. Two ways to run it:
+
+- **Wi-Fi mode:** an Android app plus a Mac menu-bar app, paired and authenticated.
+- **USB mode:** no root and no Android app needed, just `adb`.
+
+## Requirements
+
+- macOS 13 or later, with Xcode command-line tools (`xcode-select --install`)
+- An Android phone, Android 8 (API 26) or later
+- Wi-Fi mode: Android Studio or the Android SDK to build the app
+- USB mode: the Android SDK with `adb` and the NDK, at `~/Library/Android/sdk`
+  (override with `make SDK=/path/to/sdk`)
+
+## Wi-Fi mode
+
+1. Build and open the Mac menu-bar app:
+   ```sh
+   make install-app    # builds dist/MagicPad.app, copies it to ~/Applications and opens it
+   ```
+   Give it **Accessibility** permission when macOS asks, and allow
+   **Local Network** access.
+2. Build and install the Android app with the phone plugged in (USB debugging on):
+   ```sh
+   cd android && ./gradlew installDebug
+   ```
+   You can also open `android/` in Android Studio and press Run.
+3. Put the phone and the Mac on the same Wi-Fi network. Open MagicPad on the phone,
+   tap your Mac, and check that the pairing code matches on both screens.
+
+The menu-bar app has pointer speed, haptics, paired phones and start at login.
+On the phone, the settings gear changes the pad background and auto-connect,
+and there's a Quick Settings tile. The wire format is in [PROTOCOL.md](PROTOCOL.md).
+
+## USB mode
 
 ```
 phone touch chip ─► /dev/input/event6 ─► magicpad-grab ─► adb exec-out (USB)
@@ -80,3 +113,7 @@ Useful keys:
   `bin/magicpad probe spaces-left|spaces-right|mission|expose|apps|desktop`.
 - **The phone is unresponsive after a crash:** unplug it. The grab ends
   when the USB connection does.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
