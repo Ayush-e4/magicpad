@@ -22,7 +22,14 @@ final class Server: SessionDelegate {
     private var pending: [ObjectIdentifier: Session] = [:]  // all sessions, keeps them alive
 
     /// Names of the phones connected right now (main queue).
-    private(set) var connected: [String] = []
+    private(set) var connected: [String] = [] {
+        didSet { holdLowLatency(!connected.isEmpty) }
+    }
+
+    /// Held while any phone is connected (main queue). A menu-bar app with no windows is
+    /// a prime App Nap target: macOS would lower its priority and coalesce its timers,
+    /// which shows up as a sticky first touch and uneven momentum scrolling.
+    private var latencyActivity: NSObjectProtocol?
 
     init(cfg: Config) {
         self.cfg = cfg
@@ -93,6 +100,16 @@ final class Server: SessionDelegate {
         let sessions = pending.values.filter { $0.device == device }
         lock.unlock()
         sessions.forEach { $0.close() }
+    }
+
+    private func holdLowLatency(_ on: Bool) {
+        if on, latencyActivity == nil {
+            latencyActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .latencyCritical], reason: "Phone trackpad connected")
+        } else if !on, let a = latencyActivity {
+            ProcessInfo.processInfo.endActivity(a)
+            latencyActivity = nil
+        }
     }
 
     // MARK: SessionDelegate (main queue)

@@ -80,7 +80,8 @@ Session key: `S = HKDF(shared ‖ K, "magicpad v1 session", 32)`.
 
 ## 3. Touch frames (UDP, phone → Mac)
 
-Sent to the Mac's address on the `udp` port from `ready`. Big-endian.
+Sent to the Mac's address on the `udp` port from `ready`. Big-endian. The phone
+marks these packets DSCP EF (46), which Wi-Fi sends in the voice queue.
 
 | Offset | Size | Field |
 |---|---|---|
