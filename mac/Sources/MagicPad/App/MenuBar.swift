@@ -5,8 +5,9 @@ import ServiceManagement
 final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerUI {
     private let server = Server(cfg: Config.load())
     private var item: NSStatusItem!
-    private var trusted = CGPreflightPostEventAccess()
-    private var trustTimer: Timer?
+    private let access = AccessWatcher()
+    private var trusted: Bool { access.granted }
+    private var restarting = false
 
     static func run() -> Never {
         let app = NSApplication.shared
@@ -27,16 +28,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
         server.ui = self
         server.start()
 
-        if !trusted {
-            CGRequestPostEventAccess()
-            // Notice when the user grants it, so the menu stops warning.
-            trustTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] t in
-                guard let self, CGPreflightPostEventAccess() else { return }
-                self.trusted = true
-                t.invalidate()
-                self.updateIcon()
-            }
+        if !trusted { CGRequestPostEventAccess() }
+        // The icon turns white (or dims) the moment the Accessibility switch changes.
+        access.onChange = { [weak self] _ in self?.updateIcon() }
+        access.onStaleGrant = { [weak self] in
+            guard let self, !self.restarting, Bundle.main.bundleURL.pathExtension == "app" else { return }
+            // At most once a minute, so a mismatch that a restart doesn't fix can't loop.
+            let defaults = UserDefaults.standard, now = Date().timeIntervalSince1970
+            guard now - defaults.double(forKey: "lastAccessRestart") > 60 else { return }
+            defaults.set(now, forKey: "lastAccessRestart")
+            Log.info("Accessibility is on but this process still can't post events; restarting")
+            self.relaunch()
         }
+        access.start()
     }
 
     // MARK: ServerUI
@@ -89,8 +93,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
         menu.addItem(disabled(status))
         if !trusted {
             menu.addItem(action("⚠️ Allow Accessibility access…", #selector(openAccessibility)))
-            // macOS often keeps telling a running app "no" after access is granted, until it
-            // restarts. Only offered for the .app, which can reopen itself.
+            // Normally the app restarts itself once access is on; this is the manual way.
             if Bundle.main.bundleURL.pathExtension == "app" {
                 menu.addItem(action("Restart MagicPad (after allowing)", #selector(relaunch)))
             }
@@ -217,6 +220,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
     /// Quits, then a detached shell reopens the app a moment later, so the old and new
     /// copies never run (and advertise over Bonjour) at the same time.
     @objc private func relaunch() {
+        restarting = true
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
         p.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
@@ -224,6 +228,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
             try p.run()
             NSApp.terminate(nil)
         } catch {
+            restarting = false
             Log.info("Couldn't restart: \(error)")
         }
     }
