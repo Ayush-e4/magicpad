@@ -105,4 +105,16 @@ class ProtocolTest {
         val bytes = Crypto.randomBytes(16)
         assertEquals(bytes.toHex(), bytes.toHex().hexToBytes().toHex())
     }
+
+    @Test
+    fun reusedHmacMatchesFreshOnEveryFrame() {
+        val key = ByteArray(32) { it.toByte() }
+        val hmac = Frame.hmacFor(key)
+        val touches = listOf(TouchPoint(id = 1, xMm = 12.34, yMm = 5.67, majorMm = 8.0))
+        for (seq in 1L..3L) {
+            val reused = Frame.encode(7, seq, 1000 + seq, 150.0, 70.0, touches, hmac)
+            val fresh = Frame.encode(7, seq, 1000 + seq, 150.0, 70.0, touches, key)
+            assertEquals(fresh.toHex(), reused.toHex())
+        }
+    }
 }

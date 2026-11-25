@@ -35,6 +35,19 @@ Get `MagicPad-mac.zip` and `MagicPad.apk` from the
 3. Put the phone and the Mac on the same Wi-Fi network. Open MagicPad on the phone,
    tap your Mac, and check that the pairing code matches on both screens.
 
+## Getting the lowest lag (Wi-Fi mode)
+
+The app already asks for low-latency Wi-Fi, the screen's highest refresh rate and
+priority network packets. The network itself matters most:
+
+- **Plug the Mac into Ethernet** if you can (a Mac mini usually can). Then only
+  the phone's side of the trip is over the air.
+- Use **5 GHz or 6 GHz** Wi-Fi, not 2.4 GHz, and keep the phone near the router.
+- If the cursor stutters about once a second, it's usually AirDrop/Continuity
+  scanning on the Mac (AWDL). Turning off AirDrop and Handoff while you use the pad
+  helps.
+- In USB mode none of this applies; it's the steadiest option.
+
 ## Wi-Fi mode from source
 
 1. Build and open the Mac menu-bar app:

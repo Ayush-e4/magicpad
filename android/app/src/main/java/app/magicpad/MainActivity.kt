@@ -110,7 +110,11 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    /** On the pad: landscape, fullscreen, dimmed, screen kept on, low-latency Wi-Fi. */
+    /**
+     * On the pad: landscape, fullscreen, dimmed, screen kept on, low-latency Wi-Fi, and the
+     * display's highest refresh rate. Many phones scan the touchscreen faster at a higher
+     * refresh rate, and a mostly still pad would otherwise drop to the lowest one.
+     */
     @SuppressLint("SourceLockedOrientationActivity") // The pad is a landscape trackpad by design.
     private fun setPadMode(on: Boolean) {
         requestedOrientation =
@@ -128,8 +132,25 @@ class MainActivity : ComponentActivity() {
             window.attributes.apply {
                 screenBrightness =
                     if (on) settings.value.effectiveBrightness else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                preferredDisplayModeId = if (on) fastestModeId() else 0
             }
         setWifiLock(on)
+    }
+
+    /** The display mode with the highest refresh rate at the current resolution, or 0 (no preference). */
+    private fun fastestModeId(): Int {
+        val d =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display
+            } else {
+                @Suppress("DEPRECATION") // Activity.display replaces it on API 30+.
+                windowManager.defaultDisplay
+            } ?: return 0
+        val now = d.mode
+        return d.supportedModes
+            .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
+            .maxByOrNull { it.refreshRate }
+            ?.modeId ?: 0
     }
 
     private fun setWifiLock(on: Boolean) {

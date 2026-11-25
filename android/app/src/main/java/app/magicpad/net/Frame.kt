@@ -2,6 +2,8 @@ package app.magicpad.net
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 /** One finger on the pad, in millimetres from the top-left corner. */
 data class TouchPoint(
@@ -22,6 +24,10 @@ object Frame {
     const val TAG_SIZE = 16
     const val MAX_TOUCHES = 10
 
+    /** A keyed HMAC-SHA256 to reuse for every frame of a session (one thread only). */
+    fun hmacFor(sessionKey: ByteArray): Mac =
+        Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(sessionKey, "HmacSHA256")) }
+
     fun encode(
         sid: Long,
         seq: Long,
@@ -30,29 +36,42 @@ object Frame {
         heightMm: Double,
         touches: List<TouchPoint>,
         sessionKey: ByteArray,
+    ): ByteArray = encode(sid, seq, timeMs, widthMm, heightMm, touches, hmacFor(sessionKey))
+
+    /** Same as above, with a reused [hmac] so no crypto provider lookup per frame. */
+    fun encode(
+        sid: Long,
+        seq: Long,
+        timeMs: Long,
+        widthMm: Double,
+        heightMm: Double,
+        touches: List<TouchPoint>,
+        hmac: Mac,
     ): ByteArray {
         val list = touches.take(MAX_TOUCHES)
-        val body =
-            ByteBuffer.allocate(HEADER_SIZE + TOUCH_SIZE * list.size).order(ByteOrder.BIG_ENDIAN).apply {
-                put(MAGIC_0)
-                put(MAGIC_1)
-                put(VERSION)
-                put(TYPE_FRAME)
-                putInt(sid.toInt())
-                putInt(seq.toInt())
-                putInt(timeMs.toInt())
-                putShort(u16(widthMm * 100))
-                putShort(u16(heightMm * 100))
-                put(list.size.toByte())
-                for (t in list) {
-                    put(t.id.coerceIn(0, 255).toByte())
-                    putShort(u16(t.xMm * 100))
-                    putShort(u16(t.yMm * 100))
-                    put(u8(t.majorMm * 10))
-                }
-            }.array()
-        val tag = Crypto.hmac(sessionKey, body).copyOf(TAG_SIZE)
-        return body + tag
+        val bodySize = HEADER_SIZE + TOUCH_SIZE * list.size
+        val out = ByteArray(bodySize + TAG_SIZE)
+        ByteBuffer.wrap(out, 0, bodySize).order(ByteOrder.BIG_ENDIAN).apply {
+            put(MAGIC_0)
+            put(MAGIC_1)
+            put(VERSION)
+            put(TYPE_FRAME)
+            putInt(sid.toInt())
+            putInt(seq.toInt())
+            putInt(timeMs.toInt())
+            putShort(u16(widthMm * 100))
+            putShort(u16(heightMm * 100))
+            put(list.size.toByte())
+            for (t in list) {
+                put(t.id.coerceIn(0, 255).toByte())
+                putShort(u16(t.xMm * 100))
+                putShort(u16(t.yMm * 100))
+                put(u8(t.majorMm * 10))
+            }
+        }
+        hmac.update(out, 0, bodySize)
+        System.arraycopy(hmac.doFinal(), 0, out, bodySize, TAG_SIZE) // doFinal resets for the next frame
+        return out
     }
 
     private fun u16(v: Double): Short = Math.round(v).coerceIn(0L, 0xFFFFL).toInt().toShort()
