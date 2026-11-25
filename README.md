@@ -1,19 +1,41 @@
 # MagicPad
 
-Use an Android phone as a Mac trackpad, with full macOS gestures. Two ways to run it:
+Use an Android phone as a Mac trackpad, with full macOS gestures. Made for Macs
+that don't have a built-in trackpad, like the **Mac mini**, Mac Studio or an iMac
+at a desk without a Magic Trackpad.
+
+Two ways to run it:
 
 - **Wi-Fi mode:** an Android app plus a Mac menu-bar app, paired and authenticated.
 - **USB mode:** no root and no Android app needed, just `adb`.
 
 ## Requirements
 
-- macOS 13 or later, with Xcode command-line tools (`xcode-select --install`)
+- An Apple Silicon Mac (M1 or later) on macOS 13 or later. Intel Macs aren't supported.
 - An Android phone, Android 8 (API 26) or later
-- Wi-Fi mode: Android Studio or the Android SDK to build the app
-- USB mode: the Android SDK with `adb` and the NDK, at `~/Library/Android/sdk`
-  (override with `make SDK=/path/to/sdk`)
 
-## Wi-Fi mode
+To build from source you also need the Xcode command-line tools
+(`xcode-select --install`) and the Android SDK. USB mode also needs `adb` and the
+NDK, at `~/Library/Android/sdk` (override with `make SDK=/path/to/sdk`).
+
+## Download (Wi-Fi mode)
+
+Get `MagicPad-mac.zip` and `MagicPad.apk` from the
+[latest release](https://github.com/Ayush-e4/magicpad/releases/latest).
+
+1. Unzip `MagicPad-mac.zip` and move `MagicPad.app` to Applications. The app isn't
+   notarized, so macOS blocks the first launch. Clear the download flag once:
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/MagicPad.app
+   ```
+   Then open it. Give it **Accessibility** permission when macOS asks, and allow
+   **Local Network** access.
+2. Install `MagicPad.apk` on the phone. Your browser or file manager will ask you
+   to allow installing unknown apps.
+3. Put the phone and the Mac on the same Wi-Fi network. Open MagicPad on the phone,
+   tap your Mac, and check that the pairing code matches on both screens.
+
+## Wi-Fi mode from source
 
 1. Build and open the Mac menu-bar app:
    ```sh
