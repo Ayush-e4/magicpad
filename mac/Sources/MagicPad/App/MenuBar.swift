@@ -89,6 +89,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
         menu.addItem(disabled(status))
         if !trusted {
             menu.addItem(action("⚠️ Allow Accessibility access…", #selector(openAccessibility)))
+            // macOS often keeps telling a running app "no" after access is granted, until it
+            // restarts. Only offered for the .app, which can reopen itself.
+            if Bundle.main.bundleURL.pathExtension == "app" {
+                menu.addItem(action("Restart MagicPad (after allowing)", #selector(relaunch)))
+            }
         }
         menu.addItem(.separator())
 
@@ -208,4 +213,18 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate, ServerU
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    /// Quits, then a detached shell reopens the app a moment later, so the old and new
+    /// copies never run (and advertise over Bonjour) at the same time.
+    @objc private func relaunch() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
+        do {
+            try p.run()
+            NSApp.terminate(nil)
+        } catch {
+            Log.info("Couldn't restart: \(error)")
+        }
+    }
 }
